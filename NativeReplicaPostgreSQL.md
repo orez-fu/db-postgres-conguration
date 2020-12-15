@@ -29,12 +29,24 @@ Same on **slave server** (include **replica** database):
 ## Step 2 - Configuring the Primary Database to Accept Connections
 
 Configue the **primary** database to allow your **replica** database(s) to connect.
+First, create the directory /var/lib/postgresql/12/archivedir to store WAL segments on both PostgreSQL servers.
+
+```bash
+sudo mkdir /var/lib/postgresql/12/archivedir
+```
+
 Edit the listen_address configuration parameter on /etc/postgresql/12/main/postgresql.conf on the primary database.
 
 ```conf
 # /etc/postgresql/12/main/postgresql.conf
 ...
 listen_address = '<primary_ip_address>' ## eg: listen_address = '10.0.2.7'
+...
+wal_level = hot_standby
+max_wal_senders = 2
+...
+archive_mode = on
+archive_command = 'cp "%p" "/var/lib/postgresql/12/archivedir/%f"'
 ...
 ```
 
@@ -61,7 +73,7 @@ postgres=# CREATE ROLE <name_role> WITH REPLICATION PASSWORD '<password>' LOGIN;
 
 Edit the `/etc/postgresql/12/main/pg_hba.conf` configuration file to allow your **replica** to access cluster. Before, exit the PostgreSQL command prompt:
 
-```
+```bash
 postgres=# \q
 ```
 
@@ -83,7 +95,7 @@ If you want to have more than one **replica**, just add the same line again to t
 Restart the **primary** to ensure theses changes has applied:
 
 ```bash
-$ sudo systemctl restart postgresql
+sudo systemctl restart postgresql
 ```
 
 ### Step 4 - Backing Up the Primary Cluster on the Replica
@@ -119,7 +131,7 @@ eg: sudo -u postgres pg_basebackup -h 10.0.2.7 -p 5432 -U replica -D /var/lib/po
 - The `-U` option allows you to specify the user you connect to the **primary** cluster as(role name that created in the previous step).
 - The `-D` flag is the output directory of the backup. This is your **replica's** data directory that you emptied just before.
 - The `-Fp` specifies the data to be the outputted in the plain format instead of as a `tar` file.
-- The `-Xs` strams the contents of the WAL log as the backup of the **primary** is performed.
+- The `-Xs` streams the contents of the WAL log as the backup of the **primary** is performed.
 - The -R creates an empty file, named `standby.signal`, in the **replica's** data directory, and allow **replica** cluster know that it should operate as a standby server. The -R option also adds the connection information about the **primary** server to the postgresql.auto.conf file(this is a special configuration file that is read whenever the regular `postgresql.conf` file is read, but the values in the `.auto` file override the values in the regular configuration file.
 
 The `pg_basebackup` command connects to the **primary** that it requires to begin replication. Next, you'll be putting the **replica** into standby mode and start replicating.
